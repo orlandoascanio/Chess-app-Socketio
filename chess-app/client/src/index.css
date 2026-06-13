@@ -1,0 +1,81 @@
+:root {
+  --bg-deep: #161310;
+  --bg-mid: #211b17;
+  --bg-elevated: #2a231e;
+  --ivory: #f7f3eb;
+  --ivory-dim: #ebe4d8;
+  --ivory-muted: #d4cbc0;
+  --walnut: #3a2f28;
+  --walnut-light: #524338;
+  --brass: #b8956b;
+  --brass-bright: #d4b483;
+  --brass-dim: #8f7354;
+  --ink: #1a1512;
+  --ink-soft: #4a423a;
+  --ink-muted: #6e645a;
+  --ink-on-dark: #e8e0d4;
+  --ink-faint-on-dark: #a89f92;
+  --emerald: #5cb87a;
+  --emerald-dim: #3d8f5a;
+  --rose: #d46a6a;
+  --rose-dim: #a84848;
+  --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --font-display: "Cormorant Garamond", "Georgia", serif;
+  --font-body: "Outfit", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--ink-on-dark);
+  background-color: var(--bg-deep);
+  background-image:
+    linear-gradient(rgba(184, 149, 107, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(184, 149, 107, 0.04) 1px, transparent 1px),
+    radial-gradient(ellipse 100% 70% at 50% -10%, rgba(184, 149, 107, 0.14), transparent 55%),
+    linear-gradient(175deg, #1a1512 0%, #221c18 45%, #181412 100%);
+  background-size: 48px 48px, 48px 48px, auto, auto;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
