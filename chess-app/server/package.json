@@ -1,7 +1,7 @@
 {
   "name": "chess-app",
   "version": "1.0.0",
-  "main": "server/server.js",
+  "main": "server.js",
   "type": "module",
   "dependencies": {
     "chess.js": "^1.4.0",
@@ -10,7 +10,6 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "http": "^0.0.1-security",
-    "mongodb": "^6.19.0",
     "morgan": "^1.10.1",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1",
@@ -19,7 +18,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server/server.js",
+    "dev": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

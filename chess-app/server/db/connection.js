@@ -1,40 +1,134 @@
-import { MongoClient } from "mongodb";
+import pg from "pg";
+import { readFile } from "fs/promises";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
-const uri = process.env.MONGO_URI;
-if (!uri) {
-  throw new Error("❌ MONGO_URI is not defined in environment variables");
+const { Pool } = pg;
+
+const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+export function isMemoryStore() {
+  return process.env.USE_MEMORY_STORE === "1";
 }
 
-const client = new MongoClient(uri, {
-  maxPoolSize: 10, // good default for small apps
-});
+export function enableMemoryStore(reason) {
+  process.env.USE_MEMORY_STORE = "1";
+  if (reason) {
+    console.warn(`⚠️  ${reason}`);
+  }
+}
 
-let db = null;
+function dbHostLabel() {
+  if (!databaseUrl) return "unknown";
+  try {
+    return new URL(databaseUrl).host;
+  } catch {
+    return "invalid URL";
+  }
+}
+
+export function formatDbConnectionError(err) {
+  if (!databaseUrl) {
+    return [
+      "DATABASE_URL or POSTGRES_URL is not set.",
+      "Add one to chess-app/server/.env, or set USE_MEMORY_STORE=1 to run without Postgres.",
+    ].join(" ");
+  }
+
+  const host = dbHostLabel();
+  const code = err?.code;
+
+  if (code === "ECONNREFUSED") {
+    return [
+      `PostgreSQL connection refused at ${host}.`,
+      "Start Postgres locally (e.g. createdb chess_app) or set USE_MEMORY_STORE=1.",
+    ].join(" ");
+  }
+
+  if (code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ENOTFOUND") {
+    const prismaHint = host.includes("prisma.io")
+      ? "Prisma pooled URLs often fail outside Prisma deployments — use a direct Postgres URL or USE_MEMORY_STORE=1."
+      : "";
+    return [
+      `Cannot reach database at ${host} (${code || err.message}).`,
+      prismaHint,
+      "Check DATABASE_URL is valid and the host is reachable.",
+      "For local dev without Postgres, set USE_MEMORY_STORE=1 in chess-app/server/.env.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (code === "28P01" || code === "28000") {
+    return [
+      `PostgreSQL authentication failed for ${host}.`,
+      "Verify username/password in DATABASE_URL.",
+    ].join(" ");
+  }
+
+  if (code === "3D000") {
+    return [
+      `Database does not exist on ${host}.`,
+      "Create it (e.g. createdb chess_app) or update DATABASE_URL.",
+    ].join(" ");
+  }
+
+  return `PostgreSQL error (${code || "unknown"}): ${err.message}`;
+}
+
+const pool = databaseUrl
+  ? new Pool({ connectionString: databaseUrl, max: 10 })
+  : null;
+
+let schemaReady = false;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+async function runMigrations(client) {
+  const sql = await readFile(
+    join(__dirname, "migrations", "001_create_rooms.sql"),
+    "utf8"
+  );
+  await client.query(sql);
+}
 
 /**
- * Connect to MongoDB and return the database instance.
+ * Connect to PostgreSQL and ensure schema is ready.
  */
 export async function connectDB() {
-  if (!db) {
+  if (isMemoryStore()) {
+    return null;
+  }
+
+  if (!databaseUrl) {
+    throw new Error(formatDbConnectionError());
+  }
+
+  if (!schemaReady) {
+    const client = await pool.connect();
     try {
-      await client.connect();
-      db = client.db("chessApp"); // adjust DB name if needed
-      console.log("✅ Connected to MongoDB Atlas");
+      await runMigrations(client);
+      schemaReady = true;
+      console.log("✅ Connected to PostgreSQL");
     } catch (err) {
-      console.error("❌ MongoDB connection error:", err.message);
+      const detail = formatDbConnectionError(err);
+      console.error("❌ PostgreSQL connection error:", detail);
+      err.dbDetail = detail;
       throw err;
+    } finally {
+      client.release();
     }
   }
-  return db;
+
+  return pool;
 }
 
 /**
- * Get an already connected DB instance.
- * Call `connectDB()` first in your server entrypoint.
+ * Get the connection pool. Call `connectDB()` first in your server entrypoint.
  */
-export function getDB() {
-  if (!db) {
+export function getPool() {
+  if (!pool) {
     throw new Error("Database not connected. Call connectDB() first.");
   }
-  return db;
+  return pool;
 }

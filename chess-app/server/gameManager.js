@@ -47,16 +47,24 @@ class GameManager {
     if (!result) return null; // invalid move
 
     await roomStore.saveRoom(room);
-    return result;
+    return { moveResult: result, room };
+  }
+
+  async addCommentary(roomId, entry) {
+    const data = await roomStore.loadRoom(roomId);
+    if (!data) return null;
+
+    const room = Room.fromJSON(data);
+    room.addCommentary(entry);
+    await roomStore.saveRoom(room);
+    return entry;
   }
 
   // HANDLE DISCONNECT
   async handleDisconnect(socketId) {
     if (!socketId) return;
 
-    const rooms = await (await roomStore.getRoomCollection())
-      .find({ players: socketId }) 
-      .toArray();
+    const rooms = await roomStore.findRoomsByPlayerId(socketId);
 
     for (const data of rooms) {
       const room = Room.fromJSON(data);

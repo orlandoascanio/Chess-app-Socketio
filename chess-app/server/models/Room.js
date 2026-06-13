@@ -11,6 +11,8 @@ export class Room {
     /** @type {Player[]} */
     this.players = [];
     this.game = new Game();
+    /** @type {Array<{ text: string, moveSan: string, timestamp: number, roomId: string }>} */
+    this.commentary = [];
   }
 
   /**
@@ -47,7 +49,46 @@ export class Room {
   makeMove(socketId, move) {
     const player = this.players.find((p) => p.id === socketId);
     if (!player) return null;
+    if (this.game.getStatus().turn !== player.color) return null;
     return this.game.makeMove(move);
+  }
+
+  buildCommentaryContext(moveResult) {
+    const status = this.game.getStatus();
+    const recentHistory = this.game.history.slice(-8).map((m) => m.san);
+
+    return {
+      move: {
+        from: moveResult.from,
+        to: moveResult.to,
+        promotion: moveResult.promotion ?? null,
+      },
+      san: moveResult.san,
+      fen: this.game.fen(),
+      turn: status.turn,
+      status: {
+        check: status.inCheck,
+        checkmate: status.checkmate,
+        draw: status.draw,
+        stalemate: status.stalemate,
+        gameOver: status.gameOver,
+      },
+      captured: moveResult.captured ?? null,
+      piece: moveResult.piece,
+      flags: moveResult.flags,
+      history: recentHistory,
+      recentCommentary: this.commentary
+        .slice(-6)
+        .map(({ moveSan, text }) => ({ moveSan, text }))
+        .filter((entry) => entry.text),
+    };
+  }
+
+  /**
+   * @param {{ text: string, moveSan: string, timestamp: number }} entry
+   */
+  addCommentary(entry) {
+    this.commentary.push(entry);
   }
 
   /**
@@ -61,6 +102,7 @@ export class Room {
       fen: this.game.fen(),
       history: this.game.history,
       status: this.game.getStatus(),
+      commentary: this.commentary,
     };
   }
 
@@ -72,7 +114,11 @@ export class Room {
   static fromJSON(json) {
     const room = new Room(json.id);
     room.players = (json.players || []).map((p) => Player.fromJSON(p));
+    if (json.fen) {
+      room.game.chess.load(json.fen);
+    }
     room.game.history = json.history || [];
+    room.commentary = json.commentary || [];
     return room;
   }
 }

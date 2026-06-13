@@ -9,6 +9,12 @@ import { v4 as uuid } from "uuid";
 import registerSocketHandlers from "./socket.js";
 import apiRouter from "./routes/api.js";
 import logger from "./utils/logger.js";
+import {
+  connectDB,
+  enableMemoryStore,
+  formatDbConnectionError,
+  isMemoryStore,
+} from "./db/connection.js";
 
 const REQUIRED_ENVS = ["PORT"];
 REQUIRED_ENVS.forEach((name) => {
@@ -83,28 +89,113 @@ app.use((err, req, res, next) => {
 
 registerSocketHandlers(io);
 
-
+const isDev = process.env.NODE_ENV !== "production";
 const PORT = process.env.PORT || 5000;
-const httpServer = server.listen(PORT, () =>
-  logger.info(`🚀 Server running on port ${PORT}`)
-);
+let httpServer;
 
-// Set server timeout (avoid hanging connections)
-httpServer.setTimeout(10 * 1000);
+async function initializeStorage() {
+  if (!isMemoryStore() && !process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
+    if (isDev) {
+      enableMemoryStore(
+        "No DATABASE_URL set — using in-memory room store for local dev."
+      );
+    } else {
+      throw new Error(formatDbConnectionError());
+    }
+  }
 
+  if (isMemoryStore()) {
+    logger.info("Using in-memory room store (USE_MEMORY_STORE=1)");
+    return;
+  }
+
+  try {
+    await connectDB();
+  } catch (err) {
+    const detail = err.dbDetail || formatDbConnectionError(err);
+    if (isDev) {
+      enableMemoryStore(
+        `Database unavailable (${detail}). Falling back to in-memory store.`
+      );
+      logger.warn("Database connection failed; using in-memory store", {
+        error: err.message,
+        code: err.code,
+        detail,
+      });
+      return;
+    }
+    logger.error("Database connection failed", {
+      error: err.message,
+      code: err.code,
+      detail,
+    });
+    console.error(`❌ Database connection failed: ${detail}`);
+    process.exit(1);
+  }
+}
+
+let shuttingDown = false;
 
 function shutdown(signal) {
+  if (shuttingDown) {
+    logger.warn(`${signal} received again: forcing exit`);
+    process.exit(1);
+  }
+  shuttingDown = true;
+
   logger.info(`${signal} received: closing server`);
-  httpServer.close(() => {
+
+  const forceExitTimer = setTimeout(() => {
+    logger.error("Graceful shutdown timed out; forcing exit");
+    process.exit(1);
+  }, 2000);
+  forceExitTimer.unref();
+
+  const finish = (code) => {
+    clearTimeout(forceExitTimer);
+    process.exit(code);
+  };
+
+  if (!httpServer) {
+    finish(0);
+    return;
+  }
+
+  io.close((err) => {
+    if (err) {
+      logger.error("Server close error", { error: err.message });
+      finish(1);
+      return;
+    }
     logger.info("HTTP server closed");
-    process.exit(0);
+    finish(0);
   });
 }
-["SIGINT", "SIGTERM"].forEach((sig) =>
-  process.on(sig, () => shutdown(sig))
-);
 
-// Catch unhandled promise rejections
+function registerSignalHandlers() {
+  const key = "__chessAppShutdownRegistered";
+  if (globalThis[key]) return;
+  globalThis[key] = true;
+
+  for (const sig of ["SIGINT", "SIGTERM"]) {
+    process.on(sig, () => shutdown(sig));
+  }
+}
+
+registerSignalHandlers();
+
+initializeStorage()
+  .then(() => {
+    httpServer = server.listen(PORT, () =>
+      logger.info(`🚀 Server running on port ${PORT}`)
+    );
+    httpServer.setTimeout(10 * 1000);
+  })
+  .catch((err) => {
+    console.error(`❌ Failed to start server: ${err.message}`);
+    process.exit(1);
+  });
+
 process.on("unhandledRejection", (reason, promise) => {
   logger.error("Unhandled Rejection", { reason, promise });
 });

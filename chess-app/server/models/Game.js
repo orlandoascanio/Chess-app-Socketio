@@ -63,6 +63,7 @@ export class Game {
       stalemate: this.chess.isStalemate(),
       insufficientMaterial: this.chess.isInsufficientMaterial(),
       threefoldRepetition: this.chess.isThreefoldRepetition(),
+      inCheck: this.chess.inCheck(),
       turn: this.chess.turn(),
     };
   }
