@@ -241,7 +241,7 @@ export default function Board({ roomId, playerColor, fen, status, onMovePlayed, 
   const isYourTurn = playerColor && game.turn() === playerColor && !game.isGameOver();
   const turnPillNudge = moveError?.type === MOVE_ERROR.NOT_YOUR_TURN;
 
-  function onPieceDragBegin(_piece, _square) {
+  function onPieceDragBegin() {
     if (game.isGameOver()) return;
     if (playerColor && game.turn() !== playerColor) {
       setDragBlocked(true);
